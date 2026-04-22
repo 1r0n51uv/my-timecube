@@ -37,8 +37,9 @@ export function formatHoursAsDays(hours: number): string {
 
 export interface ActivityBreakdown {
   activity: string;
-  halfDays: number; // count in units of 0.5
-  rawHours: number;
+  halfDays: number; // count in units of 0.5 (sum of full + half-day buckets)
+  rawHours: number; // leftover hours that didn't reach a half-day bucket
+  totalHours: number;
 }
 
 export function periodBreakdown(
@@ -58,16 +59,28 @@ export function periodBreakdown(
   const result = new Map<string, ActivityBreakdown>();
   for (const [k, hours] of groups.entries()) {
     const activity = k.split("__")[1];
-    const cur = result.get(activity) || { activity, halfDays: 0, rawHours: 0 };
-    if (hours >= 8) {
+    const cur = result.get(activity) || { activity, halfDays: 0, rawHours: 0, totalHours: 0 };
+    // Per day: cap day at 8h → 1g; if 4-7h → 0.5g + leftover; <4h → raw
+    let h = hours;
+    if (h >= 8) {
       cur.halfDays += 1;
-    } else if (hours >= 4) {
+      h -= 8;
+    } else if (h >= 4) {
       cur.halfDays += 0.5;
-    } else {
-      cur.rawHours += hours;
+      h -= 4;
     }
+    cur.rawHours += h;
+    cur.totalHours += hours;
     result.set(activity, cur);
   }
 
   return Array.from(result.values()).sort((a, b) => a.activity.localeCompare(b.activity));
+}
+
+/** Format like "1g 1h", "0.5g", "3h", or "—" */
+export function formatHalfDays(b: { halfDays: number; rawHours: number }): string {
+  const parts: string[] = [];
+  if (b.halfDays > 0) parts.push(`${b.halfDays}g`);
+  if (b.rawHours > 0) parts.push(`${b.rawHours}h`);
+  return parts.length ? parts.join(" ") : "—";
 }

@@ -7,14 +7,16 @@ import { TimesheetTable, newId } from "@/components/TimesheetTable";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { clearCurrentUser, getCurrentUser } from "@/lib/auth";
 import { loadEntries, saveEntries, type TimeEntry } from "@/lib/storage";
+import { loadActivities } from "@/lib/activities";
 
 const Index = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState<string | null>(null);
   const now = new Date();
-  const year = now.getFullYear();
+  const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [activities, setActivities] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimer = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
@@ -26,6 +28,7 @@ const Index = () => {
       return;
     }
     setUsername(u);
+    setActivities(loadActivities(u));
   }, [navigate]);
 
   // Load entries when user/month changes
@@ -85,7 +88,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader username={username} saveStatus={saveStatus} onLogout={handleLogout} />
-      <MonthTabs month={month} onChange={setMonth} />
+      <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
       <main className="container py-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <section>
@@ -94,6 +97,7 @@ const Index = () => {
               year={year}
               month={month}
               entries={sortedEntries}
+              activities={activities}
               onAdd={handleAdd}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
