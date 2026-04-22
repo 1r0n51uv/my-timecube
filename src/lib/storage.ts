@@ -1,10 +1,4 @@
-export interface TimeEntry {
-  id: string;
-  date: string; // YYYY-MM-DD
-  activity: string;
-  hours: number;
-  notes: string;
-}
+import type { TimeEntry } from "./persistence/types";
 
 function key(username: string, year: number, month: number) {
   return `timetracking__${username}__${year}__${String(month).padStart(2, "0")}`;
@@ -24,3 +18,5 @@ export function loadEntries(username: string, year: number, month: number): Time
 export function saveEntries(username: string, year: number, month: number, entries: TimeEntry[]) {
   localStorage.setItem(key(username, year, month), JSON.stringify(entries));
 }
+
+export type { TimeEntry };

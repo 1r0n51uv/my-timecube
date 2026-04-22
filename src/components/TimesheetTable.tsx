@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
-import type { TimeEntry } from "@/lib/storage";
+import type { TimeEntry } from "@/lib/persistence/types";
 import { daysInMonth, formatDateLabel, isWeekend, toDateStr } from "@/lib/timesheet";
 import { cn } from "@/lib/utils";
 

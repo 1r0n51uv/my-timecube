@@ -14,12 +14,13 @@ import {
 } from "@/components/ui/select";
 import { getCurrentUser, isAdminUser } from "@/lib/auth";
 import { ALLOWED_USERS } from "@/lib/constants";
-import { loadEntries, saveEntries, type TimeEntry } from "@/lib/storage";
-import { loadActivities } from "@/lib/activities";
 import { MonthTabs } from "@/components/MonthTabs";
 import { TimesheetTable, newId } from "@/components/TimesheetTable";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { totalHours } from "@/lib/timesheet";
+import type { TimeEntry } from "@/lib/persistence/types";
+import { getActivities } from "@/lib/services/activities";
+import { getTimesheetEntries, saveTimesheetEntries } from "@/lib/services/timesheets";
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -30,68 +31,103 @@ export default function Admin() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [activities, setActivities] = useState<string[]>([]);
+  const [userTotals, setUserTotals] = useState<Array<{ user: string; hours: number }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimer = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    const u = getCurrentUser();
-    if (!u) {
+    const user = getCurrentUser();
+    if (!user) {
       navigate("/login", { replace: true });
       return;
     }
-    if (!isAdminUser(u)) {
+
+    if (!isAdminUser(user)) {
       toast.error("Admin access only");
       navigate("/", { replace: true });
       return;
     }
-    setCurrentUserState(u);
+
+    setCurrentUserState(user);
   }, [navigate]);
 
-  // Load when target/month/year changes
   useEffect(() => {
     if (!currentUser) return;
+
+    let active = true;
+    setIsLoading(true);
     isFirstLoad.current = true;
-    setEntries(loadEntries(targetUser, year, month));
-    setActivities(loadActivities(targetUser));
+
+    void Promise.all([
+      getTimesheetEntries(targetUser, year, month),
+      getActivities(targetUser),
+    ]).then(([nextEntries, nextActivities]) => {
+      if (!active) return;
+
+      setEntries(nextEntries);
+      setActivities(nextActivities);
+      setIsLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
   }, [currentUser, targetUser, year, month]);
 
-  // Auto-save
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let active = true;
+
+    void Promise.all(
+      ALLOWED_USERS.map(async (user) => ({
+        user,
+        hours: totalHours(await getTimesheetEntries(user, year, month)),
+      })),
+    ).then((nextTotals) => {
+      if (!active) return;
+      setUserTotals(nextTotals);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser, year, month, entries]);
+
   useEffect(() => {
     if (!currentUser) return;
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
       return;
     }
+
     setSaveStatus("saving");
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
+
     saveTimer.current = window.setTimeout(() => {
-      saveEntries(targetUser, year, month, entries);
-      setSaveStatus("saved");
-      window.setTimeout(() => setSaveStatus("idle"), 1200);
+      void saveTimesheetEntries(targetUser, year, month, entries).then(() => {
+        setSaveStatus("saved");
+        window.setTimeout(() => setSaveStatus("idle"), 1200);
+      });
     }, 300);
+
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
   }, [entries, currentUser, targetUser, year, month]);
 
-  const userTotals = useMemo(
-    () =>
-      ALLOWED_USERS.map((u) => ({
-        user: u,
-        hours: totalHours(loadEntries(u, year, month)),
-      })),
-    [year, month, entries, targetUser],
-  );
-
   const handleAdd = (date: string) => {
     setEntries((prev) => [...prev, { id: newId(), date, activity: "", hours: 0, notes: "" }]);
   };
+
   const handleUpdate = (id: string, patch: Partial<TimeEntry>) => {
-    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    setEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
   };
+
   const handleDelete = (id: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
+    setEntries((prev) => prev.filter((entry) => entry.id !== id));
     toast.success("Entry deleted");
   };
 
@@ -113,17 +149,17 @@ export default function Admin() {
             </Button>
             <h1 className="text-base font-semibold tracking-tight">Admin Panel</h1>
             {saveStatus === "saving" && (
-              <span className="text-xs text-muted-foreground">Saving…</span>
+              <span className="text-xs text-muted-foreground">Saving...</span>
             )}
             {saveStatus === "saved" && (
-              <span className="text-xs text-muted-foreground">Saved ✓</span>
+              <span className="text-xs text-muted-foreground">Saved</span>
             )}
           </div>
           <Badge variant="secondary">{currentUser}</Badge>
         </div>
       </header>
 
-      <main className="container py-6 space-y-6">
+      <main className="container space-y-6 py-6">
         <Card>
           <CardHeader>
             <CardTitle>Team overview</CardTitle>
@@ -133,16 +169,16 @@ export default function Admin() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {userTotals.map((u) => (
+              {userTotals.map((userSummary) => (
                 <button
-                  key={u.user}
-                  onClick={() => setTargetUser(u.user)}
+                  key={userSummary.user}
+                  onClick={() => setTargetUser(userSummary.user)}
                   className={`flex items-center justify-between rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent ${
-                    targetUser === u.user ? "border-primary bg-accent" : ""
+                    targetUser === userSummary.user ? "border-primary bg-accent" : ""
                   }`}
                 >
-                  <span className="text-sm font-medium">{u.user}</span>
-                  <span className="text-sm text-muted-foreground">{u.hours}h</span>
+                  <span className="text-sm font-medium">{userSummary.user}</span>
+                  <span className="text-sm text-muted-foreground">{userSummary.hours}h</span>
                 </button>
               ))}
             </div>
@@ -161,9 +197,9 @@ export default function Admin() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ALLOWED_USERS.map((u) => (
-                    <SelectItem key={u} value={u}>
-                      {u}
+                  {ALLOWED_USERS.map((user) => (
+                    <SelectItem key={user} value={user}>
+                      {user}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -172,17 +208,23 @@ export default function Admin() {
           </CardHeader>
           <CardContent className="p-0">
             <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
-            <div className="p-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+            <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px]">
               <section>
-                <TimesheetTable
-                  year={year}
-                  month={month}
-                  entries={sortedEntries}
-                  activities={activities}
-                  onAdd={handleAdd}
-                  onUpdate={handleUpdate}
-                  onDelete={handleDelete}
-                />
+                {isLoading ? (
+                  <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+                    Loading timesheet...
+                  </div>
+                ) : (
+                  <TimesheetTable
+                    year={year}
+                    month={month}
+                    entries={sortedEntries}
+                    activities={activities}
+                    onAdd={handleAdd}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                  />
+                )}
               </section>
               <aside>
                 <SummaryPanel year={year} month={month} entries={entries} />

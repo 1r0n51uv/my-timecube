@@ -1,5 +1,5 @@
 import { DAY_NAMES, MONTHS } from "./constants";
-import type { TimeEntry } from "./storage";
+import type { TimeEntry } from "./persistence/types";
 
 export function daysInMonth(year: number, month: number): number {
   // month is 1-12
