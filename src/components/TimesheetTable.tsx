@@ -3,7 +3,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
-import { ACTIVITIES } from "@/lib/constants";
 import type { TimeEntry } from "@/lib/storage";
 import { daysInMonth, formatDateLabel, isWeekend, toDateStr } from "@/lib/timesheet";
 import { cn } from "@/lib/utils";
@@ -12,6 +11,7 @@ interface Props {
   year: number;
   month: number; // 1-12
   entries: TimeEntry[];
+  activities: string[];
   onAdd: (date: string) => void;
   onUpdate: (id: string, patch: Partial<TimeEntry>) => void;
   onDelete: (id: string) => void;
@@ -21,7 +21,7 @@ function newId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export function TimesheetTable({ year, month, entries, onAdd, onUpdate, onDelete }: Props) {
+export function TimesheetTable({ year, month, entries, activities, onAdd, onUpdate, onDelete }: Props) {
   const total = daysInMonth(year, month);
 
   const rows: Array<{ date: string; day: number; weekend: boolean; entry: TimeEntry | null }> = [];
@@ -109,7 +109,7 @@ export function TimesheetTable({ year, month, entries, onAdd, onUpdate, onDelete
                           <SelectValue placeholder="Select…" />
                         </SelectTrigger>
                         <SelectContent>
-                          {ACTIVITIES.map((a) => (
+                          {activities.map((a) => (
                             <SelectItem key={a} value={a}>{a}</SelectItem>
                           ))}
                         </SelectContent>

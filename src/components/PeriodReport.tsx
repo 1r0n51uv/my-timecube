@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { TimeEntry } from "@/lib/storage";
-import { periodBreakdown, daysInMonth, toDateStr } from "@/lib/timesheet";
+import { periodBreakdown, daysInMonth, toDateStr, formatHalfDays } from "@/lib/timesheet";
 
 interface Props {
   year: number;
@@ -56,20 +56,13 @@ export function PeriodReport({ year, month, entries }: Props) {
                 </TableCell>
               </TableRow>
             ) : (
-              breakdown.map((b) => {
-                const halfLabel = b.halfDays > 0 ? `${b.halfDays}g` : "—";
-                const rawLabel = b.rawHours > 0 ? `${b.rawHours}h` : "—";
-                // Spec: if only raw hours (no half-day), show raw in half-days col too
-                const hd = b.halfDays === 0 && b.rawHours > 0 ? `${b.rawHours}h` : halfLabel;
-                const totalRaw = b.halfDays * 4 + b.rawHours;
-                return (
-                  <TableRow key={b.activity}>
-                    <TableCell className="font-medium">{b.activity}</TableCell>
-                    <TableCell>{hd}</TableCell>
-                    <TableCell>{totalRaw}h</TableCell>
-                  </TableRow>
-                );
-              })
+              breakdown.map((b) => (
+                <TableRow key={b.activity}>
+                  <TableCell className="font-medium">{b.activity}</TableCell>
+                  <TableCell>{formatHalfDays(b)}</TableCell>
+                  <TableCell>{b.totalHours}h</TableCell>
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>
