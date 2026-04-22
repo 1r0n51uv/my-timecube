@@ -1,0 +1,346 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "My Timecube API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001"
+    }
+  ],
+  "paths": {
+    "/api/config": {
+      "get": {
+        "operationId": "getAppConfig",
+        "responses": {
+          "200": {
+            "description": "Runtime app configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{username}/activities": {
+      "get": {
+        "operationId": "getUserActivities",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Username"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activities for a user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivitiesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateUserActivities",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Username"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActivitiesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated activities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivitiesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{username}/entries": {
+      "get": {
+        "operationId": "getUserTimeEntries",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Username"
+          },
+          {
+            "$ref": "#/components/parameters/Year"
+          },
+          {
+            "$ref": "#/components/parameters/Month"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time entries for a month",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntriesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceUserTimeEntries",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Username"
+          },
+          {
+            "$ref": "#/components/parameters/Year"
+          },
+          {
+            "$ref": "#/components/parameters/Month"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceTimeEntriesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved time entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntriesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/monthly-summary": {
+      "get": {
+        "operationId": "getMonthlySummary",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Year"
+          },
+          {
+            "$ref": "#/components/parameters/Month"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Monthly hour totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSummariesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Username": {
+        "name": "username",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Year": {
+        "name": "year",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 2000
+        }
+      },
+      "Month": {
+        "name": "month",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      }
+    },
+    "schemas": {
+      "AppConfig": {
+        "type": "object",
+        "required": [
+          "allowedUsers",
+          "adminUsers",
+          "defaultActivities"
+        ],
+        "properties": {
+          "allowedUsers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminUsers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultActivities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ActivitiesResponse": {
+        "type": "object",
+        "required": [
+          "activities"
+        ],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateActivitiesRequest": {
+        "type": "object",
+        "required": [
+          "activities"
+        ],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TimeEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "activity",
+          "hours",
+          "notes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "activity": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "number"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "TimeEntriesResponse": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeEntry"
+            }
+          }
+        }
+      },
+      "ReplaceTimeEntriesRequest": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeEntry"
+            }
+          }
+        }
+      },
+      "UserMonthlySummary": {
+        "type": "object",
+        "required": [
+          "user",
+          "hours"
+        ],
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "number"
+          }
+        }
+      },
+      "UserSummariesResponse": {
+        "type": "object",
+        "required": [
+          "summaries"
+        ],
+        "properties": {
+          "summaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserMonthlySummary"
+            }
+          }
+        }
+      }
+    }
+  }
+}
