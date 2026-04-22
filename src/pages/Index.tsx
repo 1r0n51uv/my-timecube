@@ -1,16 +1,111 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { AppHeader } from "@/components/AppHeader";
+import { MonthTabs } from "@/components/MonthTabs";
+import { TimesheetTable, newId } from "@/components/TimesheetTable";
+import { SummaryPanel } from "@/components/SummaryPanel";
+import { clearCurrentUser, getCurrentUser } from "@/lib/auth";
+import { loadEntries, saveEntries, type TimeEntry } from "@/lib/storage";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const navigate = useNavigate();
+  const [username, setUsername] = useState<string | null>(null);
+  const now = new Date();
+  const year = now.getFullYear();
+  const [month, setMonth] = useState<number>(now.getMonth() + 1);
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveTimer = useRef<number | null>(null);
+  const isFirstLoad = useRef(true);
+
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    setUsername(u);
+  }, [navigate]);
+
+  // Load entries when user/month changes
+  useEffect(() => {
+    if (!username) return;
+    isFirstLoad.current = true;
+    setEntries(loadEntries(username, year, month));
+  }, [username, year, month]);
+
+  // Auto-save (debounced)
+  useEffect(() => {
+    if (!username) return;
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+    setSaveStatus("saving");
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveEntries(username, year, month, entries);
+      setSaveStatus("saved");
+      window.setTimeout(() => setSaveStatus("idle"), 1200);
+    }, 300);
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, [entries, username, year, month]);
+
+  const handleLogout = () => {
+    clearCurrentUser();
+    navigate("/login", { replace: true });
+  };
+
+  const handleAdd = (date: string) => {
+    setEntries((prev) => [
+      ...prev,
+      { id: newId(), date, activity: "", hours: 0, notes: "" },
+    ]);
+  };
+
+  const handleUpdate = (id: string, patch: Partial<TimeEntry>) => {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  };
+
+  const handleDelete = (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    toast.success("Entry deleted");
+  };
+
+  const sortedEntries = useMemo(
+    () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
+    [entries],
+  );
+
+  if (!username) return null;
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background">
+      <AppHeader username={username} saveStatus={saveStatus} onLogout={handleLogout} />
+      <MonthTabs month={month} onChange={setMonth} />
+      <main className="container py-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <section>
+            <h2 className="sr-only">Timesheet</h2>
+            <TimesheetTable
+              year={year}
+              month={month}
+              entries={sortedEntries}
+              onAdd={handleAdd}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          </section>
+          <aside>
+            <SummaryPanel year={year} month={month} entries={entries} />
+          </aside>
+        </div>
+      </main>
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
