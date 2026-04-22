@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,21 +7,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { TimeEntry } from "@/lib/storage";
-import { periodBreakdown, daysInMonth, toDateStr, formatHalfDays } from "@/lib/timesheet";
+import { periodBreakdown, toDateStr, formatHalfDays, type ActivityBreakdown } from "@/lib/timesheet";
 
 interface Props {
-  year: number;
-  month: number;
   entries: TimeEntry[];
+  from: Date | undefined;
+  to: Date | undefined;
+  onFromChange: (d: Date | undefined) => void;
+  onToChange: (d: Date | undefined) => void;
+  onBreakdownChange?: (b: ActivityBreakdown[]) => void;
 }
 
-export function PeriodReport({ year, month, entries }: Props) {
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month - 1, daysInMonth(year, month));
-
-  const [from, setFrom] = useState<Date | undefined>(monthStart);
-  const [to, setTo] = useState<Date | undefined>(monthEnd);
-
+export function PeriodReport({ entries, from, to, onFromChange, onToChange }: Props) {
   const breakdown = useMemo(() => {
     if (!from || !to) return [];
     const f = toDateStr(from.getFullYear(), from.getMonth() + 1, from.getDate());
@@ -30,13 +27,11 @@ export function PeriodReport({ year, month, entries }: Props) {
     return periodBreakdown(entries, lo, hi);
   }, [entries, from, to]);
 
-  const disabled = (d: Date) => d < monthStart || d > monthEnd;
-
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row gap-2">
-        <DateField label="From" value={from} onChange={setFrom} disabled={disabled} />
-        <DateField label="To" value={to} onChange={setTo} disabled={disabled} />
+        <DateField label="From" value={from} onChange={onFromChange} />
+        <DateField label="To" value={to} onChange={onToChange} />
       </div>
 
       <div className="rounded-md border">
@@ -75,12 +70,10 @@ function DateField({
   label,
   value,
   onChange,
-  disabled,
 }: {
   label: string;
   value: Date | undefined;
   onChange: (d: Date | undefined) => void;
-  disabled: (d: Date) => boolean;
 }) {
   return (
     <div className="flex flex-col gap-1 flex-1">
@@ -100,7 +93,6 @@ function DateField({
             mode="single"
             selected={value}
             onSelect={onChange}
-            disabled={disabled}
             initialFocus
             className={cn("p-3 pointer-events-auto")}
           />
