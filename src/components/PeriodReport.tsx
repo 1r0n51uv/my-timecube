@@ -6,7 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { TimeEntry } from "@/lib/storage";
+import type { TimeEntry } from "@/lib/persistence/types";
 import { periodBreakdown, toDateStr, formatHalfDays, type ActivityBreakdown } from "@/lib/timesheet";
 
 interface Props {

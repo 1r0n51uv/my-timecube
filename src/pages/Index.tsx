@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { MonthTabs } from "@/components/MonthTabs";
 import { TimesheetTable, newId } from "@/components/TimesheetTable";
 import { SummaryPanel } from "@/components/SummaryPanel";
-import { clearCurrentUser, getCurrentUser } from "@/lib/auth";
 import type { TimeEntry } from "@/lib/persistence/types";
 import { getActivities } from "@/lib/services/activities";
 import { getTimesheetEntries, saveTimesheetEntries } from "@/lib/services/timesheets";
+import { getUserProfile, type UserProfile } from "@/lib/services/users";
+import { toUserPath, getUsernameFromSearch } from "@/lib/session";
 
 const Index = () => {
   const navigate = useNavigate();
-  const [username, setUsername] = useState<string | null>(null);
+  const location = useLocation();
+  const [user, setUser] = useState<UserProfile | null>(null);
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
@@ -24,26 +26,31 @@ const Index = () => {
   const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    const u = getCurrentUser();
-    if (!u) {
+    const username = getUsernameFromSearch(location.search);
+    if (!username) {
       navigate("/login", { replace: true });
       return;
     }
 
-    setUsername(u);
-    void getActivities(u).then(setActivities);
-  }, [navigate]);
+    void getUserProfile(username)
+      .then(setUser)
+      .catch(() => navigate("/login", { replace: true }));
+  }, [location.search, navigate]);
 
   useEffect(() => {
-    if (!username) return;
+    if (!user) return;
 
     let active = true;
     setIsLoading(true);
     isFirstLoad.current = true;
 
-    void getTimesheetEntries(username, year, month).then((nextEntries) => {
+    void Promise.all([
+      getActivities(user.username),
+      getTimesheetEntries(user.username, year, month),
+    ]).then(([nextActivities, nextEntries]) => {
       if (!active) return;
 
+      setActivities(nextActivities);
       setEntries(nextEntries);
       setIsLoading(false);
     });
@@ -51,10 +58,10 @@ const Index = () => {
     return () => {
       active = false;
     };
-  }, [username, year, month]);
+  }, [user, year, month]);
 
   useEffect(() => {
-    if (!username) return;
+    if (!user) return;
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
       return;
@@ -64,19 +71,23 @@ const Index = () => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
 
     saveTimer.current = window.setTimeout(() => {
-      void saveTimesheetEntries(username, year, month, entries).then(() => {
-        setSaveStatus("saved");
-        window.setTimeout(() => setSaveStatus("idle"), 1200);
-      });
+      void saveTimesheetEntries(user.username, year, month, entries)
+        .then(() => {
+          setSaveStatus("saved");
+          window.setTimeout(() => setSaveStatus("idle"), 1200);
+        })
+        .catch(() => {
+          setSaveStatus("idle");
+          toast.error("Unable to save timesheet");
+        });
     }, 300);
 
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [entries, username, year, month]);
+  }, [entries, user, year, month]);
 
   const handleLogout = () => {
-    clearCurrentUser();
     navigate("/login", { replace: true });
   };
 
@@ -98,11 +109,11 @@ const Index = () => {
     [entries],
   );
 
-  if (!username) return null;
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader username={username} saveStatus={saveStatus} onLogout={handleLogout} />
+      <AppHeader user={user} saveStatus={saveStatus} onLogout={handleLogout} />
       <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
       <main className="container py-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">

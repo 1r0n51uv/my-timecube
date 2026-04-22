@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getCurrentUser, isAdminUser } from "@/lib/auth";
-import { ALLOWED_USERS } from "@/lib/constants";
+import { isAdminUser } from "@/lib/auth";
 import { MonthTabs } from "@/components/MonthTabs";
 import { TimesheetTable, newId } from "@/components/TimesheetTable";
 import { SummaryPanel } from "@/components/SummaryPanel";
@@ -21,11 +20,15 @@ import { totalHours } from "@/lib/timesheet";
 import type { TimeEntry } from "@/lib/persistence/types";
 import { getActivities } from "@/lib/services/activities";
 import { getTimesheetEntries, saveTimesheetEntries } from "@/lib/services/timesheets";
+import { getUserProfile, getUsers, type UserProfile } from "@/lib/services/users";
+import { getUsernameFromSearch, toUserPath } from "@/lib/session";
 
 export default function Admin() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUserState] = useState<string | null>(null);
-  const [targetUser, setTargetUser] = useState<string>(ALLOWED_USERS[0]);
+  const location = useLocation();
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [availableUsers, setAvailableUsers] = useState<UserProfile[]>([]);
+  const [targetUser, setTargetUser] = useState<string>("");
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
@@ -38,23 +41,29 @@ export default function Admin() {
   const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (!user) {
+    const username = getUsernameFromSearch(location.search);
+    if (!username) {
       navigate("/login", { replace: true });
       return;
     }
 
-    if (!isAdminUser(user)) {
-      toast.error("Admin access only");
-      navigate("/", { replace: true });
-      return;
-    }
+    void Promise.all([getUserProfile(username), getUsers()])
+      .then(([user, users]) => {
+        if (!isAdminUser(user)) {
+          toast.error("Admin access only");
+          navigate(toUserPath("/", username), { replace: true });
+          return;
+        }
 
-    setCurrentUserState(user);
-  }, [navigate]);
+        setCurrentUser(user);
+        setAvailableUsers(users);
+        setTargetUser((prev) => prev || users[0]?.username || "");
+      })
+      .catch(() => navigate("/login", { replace: true }));
+  }, [location.search, navigate]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !targetUser) return;
 
     let active = true;
     setIsLoading(true);
@@ -77,14 +86,14 @@ export default function Admin() {
   }, [currentUser, targetUser, year, month]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || availableUsers.length === 0) return;
 
     let active = true;
 
     void Promise.all(
-      ALLOWED_USERS.map(async (user) => ({
-        user,
-        hours: totalHours(await getTimesheetEntries(user, year, month)),
+      availableUsers.map(async (user) => ({
+        user: user.username,
+        hours: totalHours(await getTimesheetEntries(user.username, year, month)),
       })),
     ).then((nextTotals) => {
       if (!active) return;
@@ -94,10 +103,10 @@ export default function Admin() {
     return () => {
       active = false;
     };
-  }, [currentUser, year, month, entries]);
+  }, [currentUser, availableUsers, year, month, entries]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !targetUser) return;
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
       return;
@@ -107,10 +116,15 @@ export default function Admin() {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
 
     saveTimer.current = window.setTimeout(() => {
-      void saveTimesheetEntries(targetUser, year, month, entries).then(() => {
-        setSaveStatus("saved");
-        window.setTimeout(() => setSaveStatus("idle"), 1200);
-      });
+      void saveTimesheetEntries(targetUser, year, month, entries)
+        .then(() => {
+          setSaveStatus("saved");
+          window.setTimeout(() => setSaveStatus("idle"), 1200);
+        })
+        .catch(() => {
+          setSaveStatus("idle");
+          toast.error("Unable to save timesheet");
+        });
     }, 300);
 
     return () => {
@@ -143,7 +157,7 @@ export default function Admin() {
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
         <div className="container flex h-14 items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(toUserPath("/", currentUser.username))}>
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
@@ -155,7 +169,7 @@ export default function Admin() {
               <span className="text-xs text-muted-foreground">Saved</span>
             )}
           </div>
-          <Badge variant="secondary">{currentUser}</Badge>
+          <Badge variant="secondary">{currentUser.username}</Badge>
         </div>
       </header>
 
@@ -197,9 +211,9 @@ export default function Admin() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ALLOWED_USERS.map((user) => (
-                    <SelectItem key={user} value={user}>
-                      {user}
+                  {availableUsers.map((user) => (
+                    <SelectItem key={user.username} value={user.username}>
+                      {user.username}
                     </SelectItem>
                   ))}
                 </SelectContent>

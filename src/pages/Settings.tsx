@@ -1,34 +1,42 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentUser } from "@/lib/auth";
 import { getActivities, saveUserActivities } from "@/lib/services/activities";
+import { getUserProfile } from "@/lib/services/users";
+import { getUsernameFromSearch, toUserPath } from "@/lib/session";
 
 export default function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState<string | null>(null);
   const [activities, setActivities] = useState<string[]>([]);
   const [newActivity, setNewActivity] = useState("");
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (!user) {
+    const currentUser = getUsernameFromSearch(location.search);
+    if (!currentUser) {
       navigate("/login", { replace: true });
       return;
     }
 
-    setUsername(user);
-    void getActivities(user).then(setActivities);
-  }, [navigate]);
+    void Promise.all([getUserProfile(currentUser), getActivities(currentUser)])
+      .then(([user, nextActivities]) => {
+        setUsername(user.username);
+        setActivities(nextActivities);
+      })
+      .catch(() => navigate("/login", { replace: true }));
+  }, [location.search, navigate]);
 
   const persist = (next: string[]) => {
     setActivities(next);
     if (username) {
-      void saveUserActivities(username, next);
+      void saveUserActivities(username, next).catch(() => {
+        toast.error("Unable to save activities");
+      });
     }
   };
 
@@ -63,7 +71,7 @@ export default function Settings() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
         <div className="container flex h-14 items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(toUserPath("/", username))}>
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
-import type { TimeEntry } from "@/lib/storage";
+import type { TimeEntry } from "@/lib/persistence/types";
 import {
   daysInMonth,
   formatHalfDays,

@@ -3,15 +3,17 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, Clock, Settings as SettingsIcon, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import { isAdminUser } from "@/lib/auth";
+import { toUserPath } from "@/lib/session";
+import type { UserProfile } from "@/lib/services/users";
 
 interface Props {
-  username: string;
+  user: UserProfile;
   saveStatus: "idle" | "saving" | "saved";
   onLogout: () => void;
 }
 
-export function AppHeader({ username, saveStatus, onLogout }: Props) {
-  const admin = isAdminUser(username);
+export function AppHeader({ user, saveStatus, onLogout }: Props) {
+  const admin = isAdminUser(user);
   return (
     <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
       <div className="container flex h-14 items-center justify-between gap-4">
@@ -26,17 +28,17 @@ export function AppHeader({ username, saveStatus, onLogout }: Props) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="secondary">{username}</Badge>
+          <Badge variant="secondary">{user.username}</Badge>
           {admin && (
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/admin">
+              <Link to={toUserPath("/admin", user.username)}>
                 <Shield className="h-4 w-4" />
                 Admin
               </Link>
             </Button>
           )}
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/settings">
+            <Link to={toUserPath("/settings", user.username)}>
               <SettingsIcon className="h-4 w-4" />
               Settings
             </Link>

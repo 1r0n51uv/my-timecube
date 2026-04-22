@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "/.netlify/functions/api";
+const DEFAULT_API_BASE = import.meta.env.DEV ? "/api" : "/.netlify/functions/api";
 
 export class ApiError extends Error {
   status: number;
@@ -11,17 +11,30 @@ export class ApiError extends Error {
 }
 
 function getApiBaseUrl() {
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_DEV_API_BASE_URL || "/api";
+  }
+
   return import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE;
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      "API unavailable. Start the local Prisma API together with Vite.",
+    );
+  }
 
   if (!response.ok) {
     const message = await response.text();
