@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrentUser } from "@/lib/auth";
+import { newId } from "@/components/TimesheetTable";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -37,12 +38,12 @@ export default function Settings() {
           <CardHeader>
             <CardTitle>Activities</CardTitle>
             <CardDescription>
-              Manage the activities available in your timesheet. Changes are saved per user.
+              Manage the shared activities available in every user timesheet.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <SettingsActivitiesEditor
-              key={`${username}-${activitiesQuery.dataUpdatedAt}`}
+              key={username}
               username={username}
               initialActivities={activitiesQuery.data?.activities ?? []}
             />
@@ -60,13 +61,31 @@ function SettingsActivitiesEditor({
   username: string;
   initialActivities: string[];
 }) {
-  const [activities, setActivities] = useState<string[]>(initialActivities);
+  const [activities, setActivities] = useState<ActivityDraft[]>(
+    () =>
+      initialActivities.map((activity) => ({
+        id: newId(),
+        value: activity,
+        savedValue: activity,
+      })),
+  );
   const [newActivity, setNewActivity] = useState("");
   const updateActivities = useUpdateActivitiesMutation(username);
 
-  const persist = async (next: string[]) => {
-    setActivities(next);
-    await updateActivities.mutateAsync(next);
+  const persist = async (next: ActivityDraft[]) => {
+    setActivities(
+      next.map((activity) => {
+        const trimmedValue = activity.value.trim();
+        return {
+          ...activity,
+          value: trimmedValue,
+          savedValue: trimmedValue,
+        };
+      }),
+    );
+    await updateActivities.mutateAsync(
+      next.map((activity) => activity.value.trim()).filter(Boolean),
+    );
   };
 
   const handleAdd = async () => {
@@ -74,23 +93,58 @@ function SettingsActivitiesEditor({
     if (!value) {
       return;
     }
-    if (activities.includes(value)) {
+    if (activities.some((activity) => activity.value === value)) {
       toast.error("Activity already exists");
       return;
     }
-    await persist([...activities, value]);
+    await persist([...activities, { id: newId(), value, savedValue: value }]);
     setNewActivity("");
     toast.success("Activity added");
   };
 
-  const handleEdit = async (index: number, value: string) => {
-    const next = [...activities];
-    next[index] = value;
-    await persist(next);
+  const handleDraftChange = (id: string, value: string) => {
+    setActivities((current) =>
+      current.map((activity) => (activity.id === id ? { ...activity, value } : activity)),
+    );
   };
 
-  const handleDelete = async (index: number) => {
-    const next = activities.filter((_, currentIndex) => currentIndex !== index);
+  const handleCommit = async (id: string) => {
+    const current = activities.find((activity) => activity.id === id);
+    if (!current) {
+      return;
+    }
+
+    const value = current.value.trim();
+    if (!value) {
+      toast.error("Activity name cannot be empty");
+      setActivities((items) =>
+        items.map((activity) =>
+          activity.id === id ? { ...activity, value: activity.savedValue } : activity,
+        ),
+      );
+      return;
+    }
+
+    const normalizedActivities = activities.map((activity) =>
+      activity.id === id ? { ...activity, value } : activity,
+    );
+
+    const duplicateCount = normalizedActivities.filter((activity) => activity.value === value).length;
+    if (duplicateCount > 1) {
+      toast.error("Activity already exists");
+      setActivities((items) =>
+        items.map((activity) =>
+          activity.id === id ? { ...activity, value: activity.savedValue } : activity,
+        ),
+      );
+      return;
+    }
+
+    await persist(normalizedActivities);
+  };
+
+  const handleDelete = async (id: string) => {
+    const next = activities.filter((activity) => activity.id !== id);
     await persist(next);
     toast.success("Activity removed");
   };
@@ -121,14 +175,24 @@ function SettingsActivitiesEditor({
             No activities yet. Add one above.
           </p>
         ) : (
-          activities.map((activity, index) => (
-            <div key={`${activity}-${index}`} className="flex gap-2 items-center">
-              <Input value={activity} onChange={(e) => void handleEdit(index, e.target.value)} />
+          activities.map((activity) => (
+            <div key={activity.id} className="flex gap-2 items-center">
+              <Input
+                value={activity.value}
+                onChange={(e) => handleDraftChange(activity.id, e.target.value)}
+                onBlur={() => void handleCommit(activity.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9 shrink-0"
-                onClick={() => void handleDelete(index)}
+                onClick={() => void handleDelete(activity.id)}
                 disabled={updateActivities.isPending}
               >
                 <Trash2 className="h-4 w-4" />
@@ -139,4 +203,10 @@ function SettingsActivitiesEditor({
       </div>
     </div>
   );
+}
+
+interface ActivityDraft {
+  id: string;
+  value: string;
+  savedValue: string;
 }

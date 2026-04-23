@@ -43,25 +43,7 @@ async function main() {
   const activityTemplates = await prisma.activityTemplate.findMany({
     orderBy: { name: "asc" },
   });
-  const users = await prisma.user.findMany({
-    include: {
-      activities: true,
-    },
-  });
-
-  for (const user of users) {
-    if (user.activities.length > 0) {
-      continue;
-    }
-
-    await prisma.activity.createMany({
-      data: activityTemplates.map((template) => ({
-        userId: user.id,
-        name: template.name,
-      })),
-      skipDuplicates: true,
-    });
-  }
+  void activityTemplates;
 }
 
 main()

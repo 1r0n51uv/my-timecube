@@ -135,7 +135,7 @@ function AdminPageContent({ currentUser }: { currentUser: string }) {
                 <div className="p-6 grid gap-6 lg:grid-cols-[1fr_360px]">
                   <section>
                     <AdminTimesheetEditor
-                      key={`${selectedUser}-${year}-${month}-${entriesQuery.dataUpdatedAt}`}
+                      key={`${selectedUser}-${year}-${month}`}
                       username={selectedUser}
                       year={year}
                       month={month}

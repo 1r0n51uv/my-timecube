@@ -39,6 +39,8 @@ export function useUpdateActivitiesMutation(username: string) {
       }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.activities(username), data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.config });
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
     },
   });
 }

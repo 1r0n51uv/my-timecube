@@ -117,38 +117,12 @@ async function getAppConfigResponse() {
 }
 
 async function ensureUser(username: string) {
-  let user = await prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { username },
-    include: {
-      activities: {
-        orderBy: { name: "asc" },
-      },
-    },
   });
 
   if (!user) {
     throw new Error(`Unknown user: ${username}`);
-  }
-
-  const defaultActivities = await getDefaultActivityNames();
-  if (user.activities.length === 0 && defaultActivities.length > 0) {
-    const userId = user.id;
-    await prisma.activity.createMany({
-      data: defaultActivities.map((name) => ({
-        name,
-        userId,
-      })),
-      skipDuplicates: true,
-    });
-
-    user = await prisma.user.findUniqueOrThrow({
-      where: { username },
-      include: {
-        activities: {
-          orderBy: { name: "asc" },
-        },
-      },
-    });
   }
 
   return user;
@@ -205,17 +179,6 @@ app.post("/api/admin/users", async (req, res, next) => {
       },
     });
 
-    const defaultActivities = await getDefaultActivityNames();
-    if (defaultActivities.length > 0) {
-      await prisma.activity.createMany({
-        data: defaultActivities.map((name) => ({
-          name,
-          userId: user.id,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
     res.status(201).json({
       user: {
         username: user.username,
@@ -265,10 +228,11 @@ app.delete("/api/admin/users/:username", async (req, res, next) => {
 
 app.get("/api/users/:username/activities", async (req, res, next) => {
   try {
-    const { username } = usernameSchema.parse(req.params);
-    const user = await ensureUser(username);
+    usernameSchema.parse(req.params);
+    await ensureUser(req.params.username);
+    const activities = await getDefaultActivityNames();
     res.json({
-      activities: user.activities.map((activity) => activity.name),
+      activities,
     });
   } catch (error) {
     next(error);
@@ -277,18 +241,17 @@ app.get("/api/users/:username/activities", async (req, res, next) => {
 
 app.put("/api/users/:username/activities", async (req, res, next) => {
   try {
-    const { username } = usernameSchema.parse(req.params);
+    usernameSchema.parse(req.params);
+    await ensureUser(req.params.username);
     const { activities } = activitiesSchema.parse(req.body);
-    const user = await ensureUser(username);
 
     await prisma.$transaction([
-      prisma.activity.deleteMany({ where: { userId: user.id } }),
+      prisma.activityTemplate.deleteMany(),
       ...(activities.length > 0
         ? [
-            prisma.activity.createMany({
+            prisma.activityTemplate.createMany({
               data: activities.map((name) => ({
                 name,
-                userId: user.id,
               })),
             }),
           ]

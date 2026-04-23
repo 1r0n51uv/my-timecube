@@ -54,7 +54,7 @@ function IndexPageContent({ username }: { username: string }) {
           <section>
             <h2 className="sr-only">Timesheet</h2>
             <TimesheetEditor
-              key={`${username}-${year}-${month}-${entriesQuery.dataUpdatedAt}`}
+              key={`${username}-${year}-${month}`}
               username={username}
               year={year}
               month={month}
