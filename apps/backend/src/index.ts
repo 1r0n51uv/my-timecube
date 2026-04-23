@@ -46,6 +46,11 @@ const usernameSchema = z.object({
   username: z.string().min(1),
 });
 
+const createUserSchema = z.object({
+  username: z.string().trim().min(1),
+  isAdmin: z.boolean().default(false),
+});
+
 const timeEntrySchema = z.object({
   id: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -161,6 +166,98 @@ app.get("/api/config", async (_req, res, next) => {
   try {
     const configResponse = await getAppConfigResponse();
     res.json(configResponse);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/users", async (_req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { username: "asc" },
+      select: {
+        username: true,
+        isAdmin: true,
+      },
+    });
+
+    res.json({ users });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/users", async (req, res, next) => {
+  try {
+    const { username, isAdmin } = createUserSchema.parse(req.body);
+    const existingUser = await prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (existingUser) {
+      throw new Error(`User ${username} already exists`);
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        username,
+        isAdmin,
+      },
+    });
+
+    const defaultActivities = await getDefaultActivityNames();
+    if (defaultActivities.length > 0) {
+      await prisma.activity.createMany({
+        data: defaultActivities.map((name) => ({
+          name,
+          userId: user.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    res.status(201).json({
+      user: {
+        username: user.username,
+        isAdmin: user.isAdmin,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/users/:username", async (req, res, next) => {
+  try {
+    const { username } = usernameSchema.parse(req.params);
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        id: true,
+        username: true,
+        isAdmin: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error(`Unknown user: ${username}`);
+    }
+
+    if (user.isAdmin) {
+      const adminCount = await prisma.user.count({
+        where: { isAdmin: true },
+      });
+
+      if (adminCount <= 1) {
+        throw new Error("Cannot remove the last admin user");
+      }
+    }
+
+    await prisma.user.delete({
+      where: { id: user.id },
+    });
+
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

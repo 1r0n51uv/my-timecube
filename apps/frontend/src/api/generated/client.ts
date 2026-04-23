@@ -6,9 +6,13 @@
  */
 import type {
   ActivitiesResponse,
+  AdminUserResponse,
+  AdminUsersResponse,
   AppConfig,
+  CreateUserRequest,
   GetMonthlySummaryParams,
   GetUserTimeEntriesParams,
+  GetUserTimeEntriesRangeParams,
   ReplaceTimeEntriesRequest,
   ReplaceUserTimeEntriesParams,
   TimeEntriesResponse,
@@ -29,6 +33,35 @@ const getAppConfig = (
  options?: SecondParameter<typeof customInstance<AppConfig>>,) => {
       return customInstance<AppConfig>(
       {url: `/api/config`, method: 'GET'
+    },
+      options);
+    }
+  
+const getAdminUsers = (
+    
+ options?: SecondParameter<typeof customInstance<AdminUsersResponse>>,) => {
+      return customInstance<AdminUsersResponse>(
+      {url: `/api/admin/users`, method: 'GET'
+    },
+      options);
+    }
+  
+const createAdminUser = (
+    createUserRequest: BodyType<CreateUserRequest>,
+ options?: SecondParameter<typeof customInstance<AdminUserResponse>>,) => {
+      return customInstance<AdminUserResponse>(
+      {url: `/api/admin/users`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: createUserRequest
+    },
+      options);
+    }
+  
+const deleteAdminUser = (
+    username: string,
+ options?: SecondParameter<typeof customInstance<void>>,) => {
+      return customInstance<void>(
+      {url: `/api/admin/users/${username}`, method: 'DELETE'
     },
       options);
     }
@@ -79,6 +112,17 @@ const replaceUserTimeEntries = (
       options);
     }
   
+const getUserTimeEntriesRange = (
+    username: string,
+    params: GetUserTimeEntriesRangeParams,
+ options?: SecondParameter<typeof customInstance<TimeEntriesResponse>>,) => {
+      return customInstance<TimeEntriesResponse>(
+      {url: `/api/users/${username}/entries-range`, method: 'GET',
+        params
+    },
+      options);
+    }
+  
 const getMonthlySummary = (
     params: GetMonthlySummaryParams,
  options?: SecondParameter<typeof customInstance<UserSummariesResponse>>,) => {
@@ -89,10 +133,14 @@ const getMonthlySummary = (
       options);
     }
   
-return {getAppConfig,getUserActivities,updateUserActivities,getUserTimeEntries,replaceUserTimeEntries,getMonthlySummary}};
+return {getAppConfig,getAdminUsers,createAdminUser,deleteAdminUser,getUserActivities,updateUserActivities,getUserTimeEntries,replaceUserTimeEntries,getUserTimeEntriesRange,getMonthlySummary}};
 export type GetAppConfigResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['getAppConfig']>>>
+export type GetAdminUsersResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['getAdminUsers']>>>
+export type CreateAdminUserResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['createAdminUser']>>>
+export type DeleteAdminUserResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['deleteAdminUser']>>>
 export type GetUserActivitiesResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['getUserActivities']>>>
 export type UpdateUserActivitiesResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['updateUserActivities']>>>
 export type GetUserTimeEntriesResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['getUserTimeEntries']>>>
 export type ReplaceUserTimeEntriesResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['replaceUserTimeEntries']>>>
+export type GetUserTimeEntriesRangeResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['getUserTimeEntriesRange']>>>
 export type GetMonthlySummaryResult = NonNullable<Awaited<ReturnType<ReturnType<typeof getMyTimecubeAPI>['getMonthlySummary']>>>

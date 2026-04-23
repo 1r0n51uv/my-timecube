@@ -80,7 +80,7 @@ const Carousel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
       [scrollPrev, scrollNext],
     );
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
       if (!api || !setApi) {
         return;
       }
@@ -88,7 +88,7 @@ const Carousel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
       setApi(api);
     }, [api, setApi]);
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
       if (!api) {
         return;
       }

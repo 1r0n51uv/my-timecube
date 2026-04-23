@@ -12,6 +12,26 @@ export const getAppConfigResponse = zod.object({
   defaultActivities: zod.array(zod.string())
 });
 
+export const getAdminUsersResponse = zod.object({
+  users: zod.array(
+    zod.object({
+      username: zod.string(),
+      isAdmin: zod.boolean()
+    })
+  )
+});
+
+export const createAdminUserBodyIsAdminDefault = false;
+
+export const createAdminUserBody = zod.object({
+  username: zod.string(),
+  isAdmin: zod.boolean().optional()
+});
+
+export const deleteAdminUserParams = zod.object({
+  username: zod.string()
+});
+
 export const getUserActivitiesParams = zod.object({
   username: zod.string()
 });
@@ -89,6 +109,27 @@ export const replaceUserTimeEntriesBody = zod.object({
 });
 
 export const replaceUserTimeEntriesResponse = zod.object({
+  entries: zod.array(
+    zod.object({
+      id: zod.string(),
+      date: zod.string().date(),
+      activity: zod.string(),
+      hours: zod.number(),
+      notes: zod.string()
+    })
+  )
+});
+
+export const getUserTimeEntriesRangeParams = zod.object({
+  username: zod.string()
+});
+
+export const getUserTimeEntriesRangeQueryParams = zod.object({
+  from: zod.string().date(),
+  to: zod.string().date()
+});
+
+export const getUserTimeEntriesRangeResponse = zod.object({
   entries: zod.array(
     zod.object({
       id: zod.string(),

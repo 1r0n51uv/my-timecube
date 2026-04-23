@@ -1,5 +1,6 @@
 export const queryKeys = {
   config: ["app-config"] as const,
+  adminUsers: ["admin-users"] as const,
   activities: (username: string) => ["activities", username] as const,
   entries: (username: string, year: number, month: number) =>
     ["entries", username, year, month] as const,

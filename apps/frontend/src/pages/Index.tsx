@@ -1,81 +1,118 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useActivitiesQuery, useAppConfigQuery, useEntriesQuery, useReplaceEntriesMutation } from "@/api/hooks";
 import { AppHeader } from "@/components/AppHeader";
 import { MonthTabs } from "@/components/MonthTabs";
 import { TimesheetTable, newId } from "@/components/TimesheetTable";
 import { SummaryPanel } from "@/components/SummaryPanel";
-import { clearCurrentUser, getCurrentUser } from "@/lib/auth";
+import { clearCurrentUser, useCurrentUser } from "@/lib/auth";
 import { isCompleteTimeEntry } from "@/lib/entry-validation";
 import type { TimeEntry } from "@/lib/types";
 
 const Index = () => {
+  const username = useCurrentUser();
+  if (!username) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <IndexPageContent username={username} />;
+};
+
+function IndexPageContent({ username }: { username: string }) {
   const navigate = useNavigate();
-  const [username, setUsername] = useState<string | null>(null);
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const saveTimer = useRef<number | null>(null);
-  const isFirstLoad = useRef(true);
   const configQuery = useAppConfigQuery();
   const activitiesQuery = useActivitiesQuery(username);
   const entriesQuery = useEntriesQuery(username, year, month);
-  const replaceEntries = useReplaceEntriesMutation(username ?? "", year, month);
 
   const handleLogout = () => {
     clearCurrentUser();
     navigate("/login", { replace: true });
   };
 
-  const handleAdd = (date: string) => {
-    setEntries((prev) => [...prev, { id: newId(), date, activity: "", hours: 0, notes: "" }]);
-  };
+  if (!entriesQuery.data && entriesQuery.isLoading) {
+    return null;
+  }
 
-  const handleUpdate = (id: string, patch: Partial<TimeEntry>) => {
-    setEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
-  };
+  const activities = activitiesQuery.data?.activities ?? configQuery.data?.defaultActivities ?? [];
+  const initialEntries = entriesQuery.data?.entries ?? [];
 
-  const handleDelete = (id: string) => {
-    setEntries((prev) => prev.filter((entry) => entry.id !== id));
-    toast.success("Entry deleted");
-  };
+  return (
+    <div className="min-h-screen bg-background">
+      <AppHeader
+        username={username}
+        adminUsers={configQuery.data?.adminUsers ?? []}
+        saveStatus="idle"
+        onLogout={handleLogout}
+      />
+      <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
+      <main className="container py-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <section>
+            <h2 className="sr-only">Timesheet</h2>
+            <TimesheetEditor
+              key={`${username}-${year}-${month}-${entriesQuery.dataUpdatedAt}`}
+              username={username}
+              year={year}
+              month={month}
+              activities={activities}
+              initialEntries={initialEntries}
+            />
+          </section>
+          <aside>
+            <SummaryPanel
+              key={`${username}-${year}-${month}`}
+              username={username}
+              year={year}
+              month={month}
+              entries={initialEntries}
+            />
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+};
 
+export default Index;
+
+function TimesheetEditor({
+  username,
+  year,
+  month,
+  activities,
+  initialEntries,
+}: {
+  username: string;
+  year: number;
+  month: number;
+  activities: string[];
+  initialEntries: TimeEntry[];
+}) {
+  const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveTimer = useRef<number | null>(null);
+  const replaceEntries = useReplaceEntriesMutation(username, year, month);
   const sortedEntries = useMemo(
     () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
     [entries],
   );
-  const hasIncompleteEntries = useMemo(
-    () => entries.some((entry) => !isCompleteTimeEntry(entry)),
-    [entries],
-  );
 
-  useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      navigate("/login", { replace: true });
-      return;
-    }
-    setUsername(currentUser);
-  }, [navigate]);
+  useLayoutEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current);
+      }
+    };
+  }, []);
 
-  useEffect(() => {
-    isFirstLoad.current = true;
-  }, [username, year, month]);
-
-  useEffect(() => {
-    setEntries(entriesQuery.data?.entries ?? []);
-  }, [entriesQuery.data]);
-
-  useEffect(() => {
-    if (!username) {
-      return;
-    }
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return;
+  const scheduleSave = (nextEntries: TimeEntry[]) => {
+    const hasIncompleteEntries = nextEntries.some((entry) => !isCompleteTimeEntry(entry));
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
     }
     if (hasIncompleteEntries) {
       setSaveStatus("idle");
@@ -83,12 +120,8 @@ const Index = () => {
     }
 
     setSaveStatus("saving");
-    if (saveTimer.current) {
-      window.clearTimeout(saveTimer.current);
-    }
-
     saveTimer.current = window.setTimeout(() => {
-      replaceEntries.mutate(entries, {
+      replaceEntries.mutate(nextEntries, {
         onSuccess: () => {
           setSaveStatus("saved");
           window.setTimeout(() => setSaveStatus("idle"), 1200);
@@ -99,51 +132,47 @@ const Index = () => {
         },
       });
     }, 300);
+  };
 
-    return () => {
-      if (saveTimer.current) {
-        window.clearTimeout(saveTimer.current);
-      }
-    };
-  }, [entries, hasIncompleteEntries, replaceEntries, username]);
+  const updateEntries = (updater: (current: TimeEntry[]) => TimeEntry[]) => {
+    setEntries((current) => {
+      const nextEntries = updater(current);
+      scheduleSave(nextEntries);
+      return nextEntries;
+    });
+  };
 
+  const handleAdd = (date: string) => {
+    updateEntries((current) => [...current, { id: newId(), date, activity: "", hours: 0, notes: "" }]);
+  };
 
-  if (!username) {
-    return null;
-  }
+  const handleUpdate = (id: string, patch: Partial<TimeEntry>) => {
+    updateEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+    );
+  };
 
-  const activities = activitiesQuery.data?.activities ?? configQuery.data?.defaultActivities ?? [];
+  const handleDelete = (id: string) => {
+    updateEntries((current) => current.filter((entry) => entry.id !== id));
+    toast.success("Entry deleted");
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppHeader
-        username={username}
-        adminUsers={configQuery.data?.adminUsers ?? []}
-        saveStatus={saveStatus}
-        onLogout={handleLogout}
-      />
-      <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
-      <main className="container py-6">
-        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-          <section>
-            <h2 className="sr-only">Timesheet</h2>
-            <TimesheetTable
-              year={year}
-              month={month}
-              entries={sortedEntries}
-              activities={activities}
-              onAdd={handleAdd}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
-          </section>
-          <aside>
-            <SummaryPanel username={username} year={year} month={month} entries={entries} />
-          </aside>
+    <>
+      {saveStatus === "saving" || saveStatus === "saved" ? (
+        <div className="mb-3 text-xs text-muted-foreground">
+          {saveStatus === "saving" ? "Saving..." : "Saved"}
         </div>
-      </main>
-    </div>
+      ) : null}
+      <TimesheetTable
+        year={year}
+        month={month}
+        entries={sortedEntries}
+        activities={activities}
+        onAdd={handleAdd}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+      />
+    </>
   );
-};
-
-export default Index;
+}

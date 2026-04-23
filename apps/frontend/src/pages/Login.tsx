@@ -1,15 +1,15 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Clock } from "lucide-react";
 import { useAppConfigQuery } from "@/api/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { getCurrentUser, isAllowedUser, setCurrentUser } from "@/lib/auth";
+import { isAllowedUser, setCurrentUser, useCurrentUser } from "@/lib/auth";
 
 type FormValues = {
   username: string;
@@ -18,6 +18,7 @@ type FormValues = {
 export default function Login() {
   const navigate = useNavigate();
   const configQuery = useAppConfigQuery();
+  const currentUser = useCurrentUser();
   const schema = useMemo(
     () =>
       z.object({
@@ -37,11 +38,9 @@ export default function Login() {
     defaultValues: { username: "" },
   });
 
-  useEffect(() => {
-    if (getCurrentUser()) {
-      navigate("/", { replace: true });
-    }
-  }, [navigate]);
+  if (currentUser) {
+    return <Navigate to="/" replace />;
+  }
 
   const onSubmit = (values: FormValues) => {
     setCurrentUser(values.username);

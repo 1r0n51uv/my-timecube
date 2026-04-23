@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy } from "lucide-react";
@@ -45,11 +45,6 @@ export function SummaryPanel({ username, year, month, entries }: Props) {
     rangeBounds?.from ?? null,
     rangeBounds?.to ?? null,
   );
-
-  useEffect(() => {
-    setFrom(new Date(year, month - 1, 1));
-    setTo(new Date(year, month - 1, daysInMonth(year, month)));
-  }, [year, month]);
 
   const reportEntries = useMemo(() => {
     if (!rangeBounds) {

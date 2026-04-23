@@ -6,14 +6,21 @@
  */
 
 export * from './activitiesResponse';
+export * from './adminUser';
+export * from './adminUserResponse';
+export * from './adminUsersResponse';
 export * from './appConfig';
+export * from './createUserRequest';
+export * from './fromDateParameter';
 export * from './getMonthlySummaryParams';
 export * from './getUserTimeEntriesParams';
+export * from './getUserTimeEntriesRangeParams';
 export * from './monthParameter';
 export * from './replaceTimeEntriesRequest';
 export * from './replaceUserTimeEntriesParams';
 export * from './timeEntriesResponse';
 export * from './timeEntry';
+export * from './toDateParameter';
 export * from './updateActivitiesRequest';
 export * from './userMonthlySummary';
 export * from './userSummariesResponse';

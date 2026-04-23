@@ -27,7 +27,7 @@ services:
     environment:
       DATABASE_URL: postgresql://admin:admin@postgres:5432/my_timecube?schema=public
       PORT: 3001
-      CORS_ORIGIN: http://localhost:8080
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
     ports:
       - "3001:3001"
     restart: unless-stopped
@@ -37,7 +37,7 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
-        VITE_API_BASE_URL: /
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/}
     container_name: my-timecube-frontend
     depends_on:
       - backend

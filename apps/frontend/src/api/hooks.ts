@@ -4,7 +4,6 @@ import {
 } from "@/api/generated/client";
 import { queryClient } from "@/api/query-client";
 import { queryKeys } from "@/api/keys";
-import { AXIOS_INSTANCE } from "@/api/custom-instance";
 import type { TimeEntry } from "@/lib/types";
 
 const api = getMyTimecubeAPI();
@@ -13,6 +12,14 @@ export function useAppConfigQuery() {
   return useQuery({
     queryKey: queryKeys.config,
     queryFn: () => api.getAppConfig(),
+  });
+}
+
+export function useAdminUsersQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.adminUsers,
+    queryFn: () => api.getAdminUsers(),
+    enabled,
   });
 }
 
@@ -36,6 +43,28 @@ export function useUpdateActivitiesMutation(username: string) {
   });
 }
 
+export function useCreateUserMutation() {
+  return useMutation({
+    mutationFn: (payload: { username: string; isAdmin: boolean }) => api.createAdminUser(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers });
+      queryClient.invalidateQueries({ queryKey: queryKeys.config });
+      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
+    },
+  });
+}
+
+export function useDeleteUserMutation() {
+  return useMutation({
+    mutationFn: (username: string) => api.deleteAdminUser(username),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers });
+      queryClient.invalidateQueries({ queryKey: queryKeys.config });
+      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
+    },
+  });
+}
+
 export function useEntriesQuery(username: string | null, year: number, month: number) {
   return useQuery({
     queryKey: username ? queryKeys.entries(username, year, month) : ["entries", "anonymous", year, month],
@@ -50,15 +79,7 @@ export function useEntriesRangeQuery(username: string | null, from: string | nul
       username && from && to
         ? queryKeys.entriesRange(username, from, to)
         : ["entries-range", "anonymous", from, to],
-    queryFn: async () => {
-      const { data } = await AXIOS_INSTANCE.get<{ entries: TimeEntry[] }>(
-        `/api/users/${username}/entries-range`,
-        {
-          params: { from, to },
-        },
-      );
-      return data;
-    },
+    queryFn: () => api.getUserTimeEntriesRange(username as string, { from: from as string, to: to as string }),
     enabled: Boolean(username && from && to),
   });
 }

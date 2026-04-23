@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 import {
   useActivitiesQuery,
   useAppConfigQuery,
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getCurrentUser, isAdminUser } from "@/lib/auth";
+import { isAdminUser, useCurrentUser } from "@/lib/auth";
 import { isCompleteTimeEntry } from "@/lib/entry-validation";
 import { MonthTabs } from "@/components/MonthTabs";
 import { TimesheetTable, newId } from "@/components/TimesheetTable";
@@ -27,117 +27,36 @@ import { SummaryPanel } from "@/components/SummaryPanel";
 import type { TimeEntry } from "@/lib/types";
 
 export default function Admin() {
+  const currentUser = useCurrentUser();
+  const configQuery = useAppConfigQuery();
+
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (configQuery.data && !isAdminUser(currentUser, configQuery.data.adminUsers)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <AdminPageContent currentUser={currentUser} />;
+}
+
+function AdminPageContent({ currentUser }: { currentUser: string }) {
   const navigate = useNavigate();
   const configQuery = useAppConfigQuery();
-  const [currentUser, setCurrentUserState] = useState<string | null>(null);
   const [targetUser, setTargetUser] = useState<string>("");
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const saveTimer = useRef<number | null>(null);
-  const isFirstLoad = useRef(true);
-  const activitiesQuery = useActivitiesQuery(targetUser || null);
-  const entriesQuery = useEntriesQuery(targetUser || null, year, month);
-  const replaceEntries = useReplaceEntriesMutation(targetUser, year, month);
-  const summaryQuery = useMonthlySummaryQuery(year, month, Boolean(currentUser));
-  const sortedEntries = useMemo(
-    () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
-    [entries],
-  );
-  const hasIncompleteEntries = useMemo(
-    () => entries.some((entry) => !isCompleteTimeEntry(entry)),
-    [entries],
-  );
-
-  useEffect(() => {
-    const user = getCurrentUser();
-    if (!user) {
-      navigate("/login", { replace: true });
-      return;
-    }
-    if (!isAdminUser(user, configQuery.data?.adminUsers ?? [])) {
-      toast.error("Admin access only");
-      navigate("/", { replace: true });
-      return;
-    }
-    setCurrentUserState(user);
-  }, [configQuery.data, navigate]);
-
-  useEffect(() => {
-    if (!targetUser && configQuery.data?.allowedUsers?.[0]) {
-      setTargetUser(configQuery.data.allowedUsers[0]);
-    }
-  }, [configQuery.data, targetUser]);
-
-  useEffect(() => {
-    isFirstLoad.current = true;
-  }, [currentUser, targetUser, year, month]);
-
-  useEffect(() => {
-    setEntries(entriesQuery.data?.entries ?? []);
-  }, [entriesQuery.data]);
-
-  useEffect(() => {
-    if (!currentUser || !targetUser) {
-      return;
-    }
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return;
-    }
-    if (hasIncompleteEntries) {
-      setSaveStatus("idle");
-      return;
-    }
-
-    setSaveStatus("saving");
-    if (saveTimer.current) {
-      window.clearTimeout(saveTimer.current);
-    }
-
-    saveTimer.current = window.setTimeout(() => {
-      replaceEntries.mutate(entries, {
-        onSuccess: () => {
-          setSaveStatus("saved");
-          window.setTimeout(() => setSaveStatus("idle"), 1200);
-        },
-        onError: () => {
-          setSaveStatus("idle");
-          toast.error("Failed to save entries");
-        },
-      });
-    }, 300);
-
-    return () => {
-      if (saveTimer.current) {
-        window.clearTimeout(saveTimer.current);
-      }
-    };
-  }, [currentUser, entries, hasIncompleteEntries, replaceEntries, targetUser]);
-
+  const summaryQuery = useMonthlySummaryQuery(year, month, true);
   const userTotals = useMemo(() => summaryQuery.data?.summaries ?? [], [summaryQuery.data]);
-
-  const handleAdd = (date: string) => {
-    setEntries((prev) => [...prev, { id: newId(), date, activity: "", hours: 0, notes: "" }]);
-  };
-
-  const handleUpdate = (id: string, patch: Partial<TimeEntry>) => {
-    setEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
-  };
-
-  const handleDelete = (id: string) => {
-    setEntries((prev) => prev.filter((entry) => entry.id !== id));
-    toast.success("Entry deleted");
-  };
-
-  if (!currentUser) {
-    return null;
-  }
-
   const allowedUsers = configQuery.data?.allowedUsers ?? [];
+  const selectedUser =
+    targetUser && allowedUsers.includes(targetUser) ? targetUser : (allowedUsers[0] ?? "");
+  const activitiesQuery = useActivitiesQuery(selectedUser || null);
+  const entriesQuery = useEntriesQuery(selectedUser || null, year, month);
   const activities = activitiesQuery.data?.activities ?? configQuery.data?.defaultActivities ?? [];
+  const initialEntries = entriesQuery.data?.entries ?? [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -149,14 +68,16 @@ export default function Admin() {
               Back
             </Button>
             <h1 className="text-base font-semibold tracking-tight">Admin Panel</h1>
-            {saveStatus === "saving" && (
-              <span className="text-xs text-muted-foreground">Saving...</span>
-            )}
-            {saveStatus === "saved" && (
-              <span className="text-xs text-muted-foreground">Saved</span>
-            )}
           </div>
-          <Badge variant="secondary">{currentUser}</Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/admin/users">
+                <Users className="h-4 w-4" />
+                Manage users
+              </Link>
+            </Button>
+            <Badge variant="secondary">{currentUser}</Badge>
+          </div>
         </div>
       </header>
 
@@ -175,7 +96,7 @@ export default function Admin() {
                   key={summary.user}
                   onClick={() => setTargetUser(summary.user)}
                   className={`flex items-center justify-between rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent ${
-                    targetUser === summary.user ? "border-primary bg-accent" : ""
+                    selectedUser === summary.user ? "border-primary bg-accent" : ""
                   }`}
                 >
                   <span className="text-sm font-medium">{summary.user}</span>
@@ -189,11 +110,11 @@ export default function Admin() {
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle>Editing: {targetUser}</CardTitle>
+              <CardTitle>Editing: {selectedUser || "No user selected"}</CardTitle>
               <CardDescription>Changes are saved to this user&apos;s timesheet.</CardDescription>
             </div>
             <div className="w-56">
-              <Select value={targetUser} onValueChange={setTargetUser}>
+              <Select value={selectedUser} onValueChange={setTargetUser} disabled={!selectedUser}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -208,26 +129,135 @@ export default function Admin() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
-            <div className="p-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-              <section>
-                <TimesheetTable
-                  year={year}
-                  month={month}
-                  entries={sortedEntries}
-                  activities={activities}
-                  onAdd={handleAdd}
-                  onUpdate={handleUpdate}
-                  onDelete={handleDelete}
-                />
-              </section>
-              <aside>
-                <SummaryPanel username={targetUser || null} year={year} month={month} entries={entries} />
-              </aside>
-            </div>
+            {selectedUser ? (
+              <>
+                <MonthTabs year={year} month={month} onMonthChange={setMonth} onYearChange={setYear} />
+                <div className="p-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+                  <section>
+                    <AdminTimesheetEditor
+                      key={`${selectedUser}-${year}-${month}-${entriesQuery.dataUpdatedAt}`}
+                      username={selectedUser}
+                      year={year}
+                      month={month}
+                      activities={activities}
+                      initialEntries={initialEntries}
+                    />
+                  </section>
+                  <aside>
+                    <SummaryPanel
+                      key={`${selectedUser}-${year}-${month}`}
+                      username={selectedUser}
+                      year={year}
+                      month={month}
+                      entries={initialEntries}
+                    />
+                  </aside>
+                </div>
+              </>
+            ) : (
+              <div className="p-6 text-sm text-muted-foreground">No users available yet.</div>
+            )}
           </CardContent>
         </Card>
       </main>
     </div>
+  );
+}
+
+function AdminTimesheetEditor({
+  username,
+  year,
+  month,
+  activities,
+  initialEntries,
+}: {
+  username: string;
+  year: number;
+  month: number;
+  activities: string[];
+  initialEntries: TimeEntry[];
+}) {
+  const [entries, setEntries] = useState<TimeEntry[]>(initialEntries);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveTimer = useRef<number | null>(null);
+  const replaceEntries = useReplaceEntriesMutation(username, year, month);
+  const sortedEntries = useMemo(
+    () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
+    [entries],
+  );
+
+  useLayoutEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current);
+      }
+    };
+  }, []);
+
+  const scheduleSave = (nextEntries: TimeEntry[]) => {
+    const hasIncompleteEntries = nextEntries.some((entry) => !isCompleteTimeEntry(entry));
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+    }
+    if (hasIncompleteEntries) {
+      setSaveStatus("idle");
+      return;
+    }
+
+    setSaveStatus("saving");
+    saveTimer.current = window.setTimeout(() => {
+      replaceEntries.mutate(nextEntries, {
+        onSuccess: () => {
+          setSaveStatus("saved");
+          window.setTimeout(() => setSaveStatus("idle"), 1200);
+        },
+        onError: () => {
+          setSaveStatus("idle");
+          toast.error("Failed to save entries");
+        },
+      });
+    }, 300);
+  };
+
+  const updateEntries = (updater: (current: TimeEntry[]) => TimeEntry[]) => {
+    setEntries((current) => {
+      const nextEntries = updater(current);
+      scheduleSave(nextEntries);
+      return nextEntries;
+    });
+  };
+
+  const handleAdd = (date: string) => {
+    updateEntries((current) => [...current, { id: newId(), date, activity: "", hours: 0, notes: "" }]);
+  };
+
+  const handleUpdate = (id: string, patch: Partial<TimeEntry>) => {
+    updateEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+    );
+  };
+
+  const handleDelete = (id: string) => {
+    updateEntries((current) => current.filter((entry) => entry.id !== id));
+    toast.success("Entry deleted");
+  };
+
+  return (
+    <>
+      {saveStatus === "saving" || saveStatus === "saved" ? (
+        <div className="mb-3 text-xs text-muted-foreground">
+          {saveStatus === "saving" ? "Saving..." : "Saved"}
+        </div>
+      ) : null}
+      <TimesheetTable
+        year={year}
+        month={month}
+        entries={sortedEntries}
+        activities={activities}
+        onAdd={handleAdd}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+      />
+    </>
   );
 }
