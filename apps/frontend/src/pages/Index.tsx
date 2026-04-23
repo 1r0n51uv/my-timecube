@@ -138,7 +138,7 @@ const Index = () => {
             />
           </section>
           <aside>
-            <SummaryPanel year={year} month={month} entries={entries} />
+            <SummaryPanel username={username} year={year} month={month} entries={entries} />
           </aside>
         </div>
       </main>

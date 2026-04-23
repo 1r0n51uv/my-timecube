@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
+import { useEntriesRangeQuery } from "@/api/hooks";
 import type { TimeEntry } from "@/lib/types";
 import {
   daysInMonth,
@@ -14,12 +15,13 @@ import {
 import { PeriodReport } from "./PeriodReport";
 
 interface Props {
+  username: string | null;
   year: number;
   month: number;
   entries: TimeEntry[];
 }
 
-export function SummaryPanel({ year, month, entries }: Props) {
+export function SummaryPanel({ username, year, month, entries }: Props) {
   const total = totalHours(entries);
   const days = Math.round((total / 8) * 100) / 100;
 
@@ -27,23 +29,53 @@ export function SummaryPanel({ year, month, entries }: Props) {
   const monthEnd = new Date(year, month - 1, daysInMonth(year, month));
   const [from, setFrom] = useState<Date | undefined>(monthStart);
   const [to, setTo] = useState<Date | undefined>(monthEnd);
+  const rangeBounds = useMemo(() => {
+    if (!from || !to) {
+      return null;
+    }
 
-  // Reset range when month/year changes
-  useMemo(() => {
+    const fromStr = toDateStr(from.getFullYear(), from.getMonth() + 1, from.getDate());
+    const toStr = toDateStr(to.getFullYear(), to.getMonth() + 1, to.getDate());
+    const [lo, hi] = fromStr <= toStr ? [fromStr, toStr] : [toStr, fromStr];
+
+    return { from: lo, to: hi };
+  }, [from, to]);
+  const rangeEntriesQuery = useEntriesRangeQuery(
+    username,
+    rangeBounds?.from ?? null,
+    rangeBounds?.to ?? null,
+  );
+
+  useEffect(() => {
     setFrom(new Date(year, month - 1, 1));
     setTo(new Date(year, month - 1, daysInMonth(year, month)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
 
+  const reportEntries = useMemo(() => {
+    if (!rangeBounds) {
+      return entries;
+    }
+
+    const fetchedEntries = rangeEntriesQuery.data?.entries ?? [];
+    const currentMonthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+    const includesCurrentMonth =
+      rangeBounds.from.slice(0, 7) <= currentMonthPrefix &&
+      currentMonthPrefix <= rangeBounds.to.slice(0, 7);
+
+    if (!includesCurrentMonth) {
+      return fetchedEntries;
+    }
+
+    const otherEntries = fetchedEntries.filter((entry) => !entry.date.startsWith(currentMonthPrefix));
+    return [...otherEntries, ...entries].sort((a, b) => a.date.localeCompare(b.date));
+  }, [entries, month, rangeBounds, rangeEntriesQuery.data?.entries, year]);
+
   const rawString = useMemo(() => {
-    if (!from || !to) return "";
-    const f = toDateStr(from.getFullYear(), from.getMonth() + 1, from.getDate());
-    const t = toDateStr(to.getFullYear(), to.getMonth() + 1, to.getDate());
-    const [lo, hi] = f <= t ? [f, t] : [t, f];
-    const breakdown = periodBreakdown(entries, lo, hi);
+    if (!rangeBounds) return "";
+    const breakdown = periodBreakdown(reportEntries, rangeBounds.from, rangeBounds.to);
     if (breakdown.length === 0) return "";
     return breakdown.map((b) => `${b.activity}: ${formatHalfDays(b)}`).join(" | ");
-  }, [entries, from, to]);
+  }, [rangeBounds, reportEntries]);
 
   const copyRaw = async () => {
     if (!rawString) return;
@@ -69,7 +101,7 @@ export function SummaryPanel({ year, month, entries }: Props) {
         </CardHeader>
         <CardContent>
           <PeriodReport
-            entries={entries}
+            entries={reportEntries}
             from={from}
             to={to}
             onFromChange={setFrom}

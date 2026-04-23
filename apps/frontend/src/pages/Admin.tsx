@@ -42,6 +42,14 @@ export default function Admin() {
   const entriesQuery = useEntriesQuery(targetUser || null, year, month);
   const replaceEntries = useReplaceEntriesMutation(targetUser, year, month);
   const summaryQuery = useMonthlySummaryQuery(year, month, Boolean(currentUser));
+  const sortedEntries = useMemo(
+    () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
+    [entries],
+  );
+  const hasIncompleteEntries = useMemo(
+    () => entries.some((entry) => !isCompleteTimeEntry(entry)),
+    [entries],
+  );
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -123,15 +131,6 @@ export default function Admin() {
     setEntries((prev) => prev.filter((entry) => entry.id !== id));
     toast.success("Entry deleted");
   };
-
-  const sortedEntries = useMemo(
-    () => [...entries].sort((a, b) => a.date.localeCompare(b.date)),
-    [entries],
-  );
-  const hasIncompleteEntries = useMemo(
-    () => entries.some((entry) => !isCompleteTimeEntry(entry)),
-    [entries],
-  );
 
   if (!currentUser) {
     return null;
@@ -223,7 +222,7 @@ export default function Admin() {
                 />
               </section>
               <aside>
-                <SummaryPanel year={year} month={month} entries={entries} />
+                <SummaryPanel username={targetUser || null} year={year} month={month} entries={entries} />
               </aside>
             </div>
           </CardContent>

@@ -4,6 +4,7 @@ import {
 } from "@/api/generated/client";
 import { queryClient } from "@/api/query-client";
 import { queryKeys } from "@/api/keys";
+import { AXIOS_INSTANCE } from "@/api/custom-instance";
 import type { TimeEntry } from "@/lib/types";
 
 const api = getMyTimecubeAPI();
@@ -43,12 +44,32 @@ export function useEntriesQuery(username: string | null, year: number, month: nu
   });
 }
 
+export function useEntriesRangeQuery(username: string | null, from: string | null, to: string | null) {
+  return useQuery({
+    queryKey:
+      username && from && to
+        ? queryKeys.entriesRange(username, from, to)
+        : ["entries-range", "anonymous", from, to],
+    queryFn: async () => {
+      const { data } = await AXIOS_INSTANCE.get<{ entries: TimeEntry[] }>(
+        `/api/users/${username}/entries-range`,
+        {
+          params: { from, to },
+        },
+      );
+      return data;
+    },
+    enabled: Boolean(username && from && to),
+  });
+}
+
 export function useReplaceEntriesMutation(username: string, year: number, month: number) {
   return useMutation({
     mutationFn: (entries: TimeEntry[]) =>
       api.replaceUserTimeEntries(username, { entries }, { year, month }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.entries(username, year, month), data);
+      queryClient.invalidateQueries({ queryKey: ["entries-range", username] });
       queryClient.invalidateQueries({ queryKey: queryKeys.monthlySummary(year, month) });
     },
   });

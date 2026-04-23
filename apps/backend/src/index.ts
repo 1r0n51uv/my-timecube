@@ -29,6 +29,19 @@ const monthQuerySchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
 });
 
+const dateRangeQuerySchema = z
+  .object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .transform(({ from, to }) => {
+    const [lo, hi] = from <= to ? [from, to] : [to, from];
+    return {
+      from: lo,
+      to: hi,
+    };
+  });
+
 const usernameSchema = z.object({
   username: z.string().min(1),
 });
@@ -62,6 +75,13 @@ function monthRange(year: number, month: number) {
   const from = new Date(Date.UTC(year, month - 1, 1));
   const to = new Date(Date.UTC(year, month, 1));
   return { from, to };
+}
+
+function inclusiveDateRange(from: string, to: string) {
+  const start = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T00:00:00.000Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { from: start, to: end };
 }
 
 async function getDefaultActivityNames() {
@@ -197,6 +217,38 @@ app.get("/api/users/:username/entries", async (req, res, next) => {
         date: {
           gte: from,
           lt: to,
+        },
+      },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    });
+
+    res.json({
+      entries: entries.map((entry) => ({
+        id: entry.id,
+        date: entry.date.toISOString().slice(0, 10),
+        activity: entry.activity,
+        hours: entry.hours,
+        notes: entry.notes,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/users/:username/entries-range", async (req, res, next) => {
+  try {
+    const { username } = usernameSchema.parse(req.params);
+    const { from, to } = dateRangeQuerySchema.parse(req.query);
+    const user = await ensureUser(username);
+    const range = inclusiveDateRange(from, to);
+
+    const entries = await prisma.timeEntry.findMany({
+      where: {
+        userId: user.id,
+        date: {
+          gte: range.from,
+          lt: range.to,
         },
       },
       orderBy: [{ date: "asc" }, { createdAt: "asc" }],
