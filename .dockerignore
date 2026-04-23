@@ -1,0 +1,17 @@
+.git
+.gitignore
+.idea
+.lovable
+node_modules
+apps/*/node_modules
+dist
+apps/*/dist
+.pnpm-store
+coverage
+tmp
+*.log
+Dockerfile*
+docker-compose*.yml
+!apps/backend/Dockerfile
+!apps/frontend/Dockerfile
+!docker-compose.yml
